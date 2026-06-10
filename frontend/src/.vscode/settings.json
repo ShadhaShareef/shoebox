@@ -1,0 +1,15 @@
+{
+    "css.validate": false,
+    "scss.validate": false,
+    "less.validate": false,
+    "css.lint.unknownAtRules": "ignore",
+    "tailwindCSS.validate": true,
+
+    // (optional) keep other useful Tailwind settings
+    "tailwindCSS.includeLanguages": {
+      "plaintext": "html"
+    },
+    "tailwindCSS.experimental.classRegex": [
+      ["(^|\\s)cn\\(([^)]*)\\)", "'([^']*)'"]
+    ]
+}

@@ -6,21 +6,21 @@ type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
 };
 
 const variantStyles = {
-  primary: 'bg-brand-600 text-white hover:bg-brand-700 focus-visible:ring-brand-400',
-  secondary: 'bg-neutral-100 text-neutral-900 hover:bg-neutral-200 focus-visible:ring-brand-200',
-  outline: 'border border-neutral-300 bg-white text-neutral-900 hover:bg-neutral-50 focus-visible:ring-brand-200',
+  primary: 'bg-ink text-white hover:bg-black focus-visible:ring-ink',
+  secondary: 'bg-white text-ink hover:border-ink hover:bg-white focus-visible:ring-ink border border-border',
+  outline: 'border border-border bg-transparent text-ink hover:bg-white focus-visible:ring-ink',
 };
 
 const sizeStyles = {
-  sm: 'px-4 py-2 text-sm',
-  md: 'px-5 py-3 text-base',
-  lg: 'px-6 py-4 text-base',
+  sm: 'px-3 py-2 text-sm',
+  md: 'px-4 py-3 text-sm',
+  lg: 'px-5 py-4 text-sm',
 };
 
 const Button = ({ variant = 'primary', size = 'md', className = '', ...props }: ButtonProps) => {
   return (
     <button
-      className={`inline-flex items-center justify-center gap-2 rounded-lg font-semibold transition duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-white disabled:cursor-not-allowed disabled:opacity-60 ${variantStyles[variant]} ${sizeStyles[size]} ${className}`}
+      className={`inline-flex items-center justify-center gap-2 rounded-md font-semibold transition-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-paper disabled:cursor-not-allowed disabled:opacity-60 ${variantStyles[variant]} ${sizeStyles[size]} ${className}`}
       {...props}
     />
   );

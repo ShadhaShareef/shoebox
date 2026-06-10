@@ -1,240 +1,407 @@
-import { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
-import { fetchProduct, addToCart, fetchReviews, fetchAvailability } from '../lib/api';
+import { useEffect, useMemo, useState } from 'react';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import Container from '../components/layout/Container';
+import PageHeader from '../components/layout/PageHeader';
 import ProductGallery from '../components/product/ProductGallery';
 import PriceBlock from '../components/product/PriceBlock';
-import SizeSelector from '../components/product/SizeSelector';
 import QuantitySelector from '../components/product/QuantitySelector';
+import SizeSelector from '../components/product/SizeSelector';
+import Modal from '../components/ui/Modal';
 import Button from '../components/ui/Button';
 import Badge from '../components/ui/Badge';
-import Modal from '../components/ui/Modal';
-import Tabs from '../components/ui/Tabs';
-import ReviewCard from '../components/cards/ReviewCard';
-import ProductCard from '../components/cards/ProductCard';
-import type { Product, Review } from '../types';
+import Select from '../components/ui/Select';
+import { addToCart, fetchAvailability, fetchProduct, fetchReviews, fetchStores, toggleWishlist } from '../lib/api';
+import { estimateStoreDistance, nearestStoreCity } from '../lib/geo';
+import { formatDistance, formatMoney } from '../lib/format';
+import { deliveryMethods, storeCities } from '../lib/retail';
+import type { Product, Review, Store } from '../types';
+import { BoxIcon, MapPinIcon, ShieldIcon, TruckIcon, HeartIcon, ArrowRightIcon } from '../components/ui/icons';
+import { useAuth } from '../context/AuthContext';
+
+type ProductDetailState = {
+  product: Product | null;
+  related: Product[];
+  reviews: Review[];
+  stores: Array<{ id: number; name: string; stock: number }>;
+};
 
 const ProductDetailPage = () => {
   const { id } = useParams();
-  const [product, setProduct] = useState<Product | null>(null);
-  const [related, setRelated] = useState<Product[]>([]);
-  const [reviews, setReviews] = useState<Review[]>([]);
-  const [selectedSize, setSelectedSize] = useState('8');
-  const [quantity, setQuantity] = useState(1);
-  const [wishlisted, setWishlisted] = useState(false);
-  const [activeTab, setActiveTab] = useState('description');
-  const [modalOpen, setModalOpen] = useState(false);
-  const [availabilityStores, setAvailabilityStores] = useState<Array<{ id: number; name: string; stock: number }>>([]);
-  const [availLoading, setAvailLoading] = useState(false);
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  const [state, setState] = useState<ProductDetailState>({ product: null, related: [], reviews: [], stores: [] });
   const [loading, setLoading] = useState(true);
-  const [message, setMessage] = useState('');
+  const [size, setSize] = useState('');
+  const [quantity, setQuantity] = useState(1);
+  const [selectedCity, setSelectedCity] = useState('Kochi');
+  const [availabilityOpen, setAvailabilityOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [wishlisted, setWishlisted] = useState(false);
+  const [activeTab, setActiveTab] = useState<'description' | 'specs' | 'reviews'>('description');
+  const [reserveModalOpen, setReserveModalOpen] = useState(false);
 
   useEffect(() => {
-    if (!id) return;
-    setLoading(true);
-    const load = async () => {
+    let active = true;
+    (async () => {
+      if (!id) return;
       try {
-        const response = await fetchProduct(id);
-        const reviewResponse = await fetchReviews(id);
-        setProduct(response.product);
-        setRelated(response.related);
-        setReviews(reviewResponse.reviews);
-        setSelectedSize(response.product.sizes?.[0] ?? '8');
+        const [productResponse, reviewsResponse, storesResponse] = await Promise.all([
+          fetchProduct(id),
+          fetchReviews(id),
+          fetchStores(),
+        ]);
+        if (!active) return;
+        setState({
+          product: productResponse.product,
+          related: productResponse.related,
+          reviews: reviewsResponse.reviews,
+          stores: storesResponse.stores.map((store) => ({ id: store.id, name: store.name, stock: 0 })),
+        });
+        setSize(productResponse.product.sizes?.[0] ?? '');
+
+        const availability = await fetchAvailability(productResponse.product.id, productResponse.product.sizes?.[0]);
+        if (!active) return;
+        setState((current) => ({ ...current, stores: availability.stores }));
       } finally {
-        setLoading(false);
+        if (active) setLoading(false);
       }
+    })();
+    return () => {
+      active = false;
     };
-    load();
   }, [id]);
 
-  const handleAddToCart = async () => {
+  const product = state.product;
+  const galleryImages = useMemo(() => {
+    const images = [product?.image_url, state.related[0]?.image_url, state.related[1]?.image_url].filter(Boolean) as string[];
+    return images.length ? images : [''];
+  }, [product?.image_url, state.related]);
+
+  const storeRows = useMemo(() => {
+    const storeNames = state.stores.length ? state.stores : [];
+    return storeNames
+      .map((store) => {
+        const distance = estimateStoreDistance(selectedCity, store.name);
+        return {
+          ...store,
+          distance,
+          city: store.name,
+        };
+      })
+      .sort((a, b) => a.distance - b.distance);
+  }, [selectedCity, state.stores]);
+
+  const nearestStore = nearestStoreCity(selectedCity, storeCities as unknown as string[]);
+
+  const handleWishlist = async () => {
     if (!product) return;
+    if (!user) {
+      navigate('/login');
+      return;
+    }
+    setSaving(true);
     try {
-      await addToCart({ product_id: product.id, quantity, size: selectedSize });
-      setMessage('Added to your cart');
-      window.dispatchEvent(new Event('cart:updated'));
-    } catch (error) {
-      setMessage('Unable to add to cart. Please try again.');
+      await toggleWishlist(product.id);
+      setWishlisted((value) => !value);
+    } finally {
+      setSaving(false);
     }
   };
 
-  useEffect(() => {
-    if (!modalOpen || !product) return;
-    let mounted = true;
-    setAvailLoading(true);
-    fetchAvailability(product.id, selectedSize)
-      .then((res) => {
-        if (!mounted) return;
-        setAvailabilityStores(res.stores ?? []);
-      })
-      .catch(() => setAvailabilityStores([]))
-      .finally(() => setAvailLoading(false));
-    return () => { mounted = false; };
-  }, [modalOpen, product, selectedSize]);
+  const handleAddToCart = async (proceedToCheckout = false) => {
+    if (!product) return;
+    if (!user) {
+      navigate('/login');
+      return;
+    }
+    setSaving(true);
+    try {
+      await addToCart({ product_id: product.id, quantity, size: size || product.sizes?.[0] });
+      window.dispatchEvent(new Event('cart:updated'));
+      if (proceedToCheckout) {
+        navigate('/checkout');
+      } else {
+        navigate('/cart');
+      }
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleReserve = async () => {
+    if (!product) return;
+    if (!user) {
+      navigate('/login');
+      return;
+    }
+    setSaving(true);
+    try {
+      await addToCart({ product_id: product.id, quantity, size: size || product.sizes?.[0] });
+      window.dispatchEvent(new Event('cart:updated'));
+      navigate('/checkout?delivery=store_pickup');
+    } finally {
+      setSaving(false);
+    }
+  };
 
   if (loading) {
-    return (
-      <Container className="py-20">
-        <div className="rounded-[32px] border border-neutral-200 bg-white p-10 shadow-sm">Loading product...</div>
-      </Container>
-    );
+    return <div className="surface p-6 text-sm text-muted">Loading product...</div>;
   }
 
   if (!product) {
     return (
-      <Container className="py-20">
-        <div className="rounded-[32px] border border-neutral-200 bg-white p-10 shadow-sm text-center text-neutral-700">Product not found.</div>
-      </Container>
+      <div className="surface px-6 py-10 text-center">
+        <h1 className="text-lg font-semibold text-ink">Product not found</h1>
+        <p className="mt-2 text-sm text-muted">The item may have been removed or is temporarily unavailable.</p>
+        <Link to="/shop">
+          <Button className="mt-4">Return to shop</Button>
+        </Link>
+      </div>
     );
   }
 
-  const discount = product.sale_price ? Math.round(((product.price - product.sale_price) / product.price) * 100) : 0;
-
   return (
-    <Container className="pb-20 pt-8 lg:pb-24 lg:pt-12">
-      <div className="mb-6">
-        <nav className="text-sm text-neutral-500">
-          <span className="text-neutral-600">Home</span> · <span className="text-neutral-600">Shop</span> · <span className="text-neutral-900 font-semibold">{product.name}</span>
-        </nav>
+    <div className="space-y-8">
+      <div className="flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-[0.12em] text-muted">
+        <Link to="/shop">Shop</Link>
+        <span>/</span>
+        <span>{product.brand}</span>
+        <span>/</span>
+        <span>{product.name}</span>
       </div>
 
-      <div className="grid gap-8 lg:grid-cols-[1fr_420px]">
-        <main className="space-y-8">
-          <div className="rounded-[28px] border border-neutral-200 bg-white p-6 shadow-sm">
-            <div className="grid gap-6 lg:grid-cols-[1fr_420px] items-start">
-              <div>
-                <ProductGallery product={product} />
-              </div>
-              <aside className="hidden lg:block">
-                <div className="sticky top-24 space-y-6">
-                  <div className="rounded-2xl bg-white p-6 shadow">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <h1 className="text-2xl font-semibold text-neutral-900">{product.name}</h1>
-                        <p className="text-sm text-neutral-500">{product.brand} · {product.category}</p>
-                      </div>
-                    </div>
-                    <div className="mt-4">
-                      <PriceBlock product={product} />
-                    </div>
-                    <div className="mt-4 space-y-4">
-                      <div>
-                        <p className="text-sm font-semibold uppercase text-neutral-500">Select size</p>
-                        <div className="mt-3">
-                          <SizeSelector sizes={product.sizes ?? ['6','7','8','9','10']} value={selectedSize} onChange={setSelectedSize} />
-                        </div>
-                      </div>
-                      <div>
-                        <p className="text-sm font-semibold uppercase text-neutral-500">Quantity</p>
-                        <div className="mt-3">
-                          <QuantitySelector quantity={quantity} setQuantity={setQuantity} />
-                        </div>
-                      </div>
-                      <div className="mt-2 flex gap-3">
-                        <Button size="lg" className="flex-1" onClick={handleAddToCart}>Add to cart</Button>
-                        <Button variant="outline" size="lg" onClick={() => setModalOpen(true)}>Check availability</Button>
-                      </div>
-                      <div className="mt-2">
-                        <button type="button" className={`text-sm font-medium text-neutral-700`} onClick={() => setWishlisted((c) => !c)}>
-                          {wishlisted ? 'Wishlisted' : 'Add to wishlist'}
-                        </button>
-                      </div>
-                      {message && <div className="mt-3 rounded-2xl bg-brand-50 px-3 py-2 text-sm text-brand-800">{message}</div>}
-                    </div>
-                  </div>
-                </div>
-              </aside>
+      <section className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
+        <ProductGallery images={galleryImages} alt={product.name} />
+
+        <div className="space-y-5">
+          <div className="space-y-3">
+            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted">{product.brand}</p>
+            <h1 className="text-3xl font-semibold text-ink">{product.name}</h1>
+            <div className="flex items-center gap-3 text-sm text-muted">
+              <span className="inline-flex items-center gap-1 text-ink">
+                <BoxIcon className="h-4 w-4 text-accent" />
+                {product.rating?.toFixed(1) ?? '4.8'}
+              </span>
+              <span>{product.review_count ?? 0} reviews</span>
+              <span>•</span>
+              <span>In stock in selected stores</span>
             </div>
           </div>
 
-          <section className="rounded-[32px] border border-neutral-200 bg-white p-6 shadow-sm">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm uppercase tracking-[0.24em] text-neutral-500">Product Details</p>
-                <h2 className="mt-2 text-xl font-semibold text-neutral-900">{product.name}</h2>
-                <p className="mt-1 text-sm text-neutral-600">{product.brand} · {product.category}</p>
-              </div>
-              <div className="text-sm text-neutral-500">{product.rating ?? 4.8} ★ • {product.review_count ?? 54} reviews</div>
-            </div>
-            <div className="mt-6">
-              <Tabs activeId={activeTab} onChange={setActiveTab} tabs={[
-                { id: 'description', label: 'Description', content: <p className="text-sm leading-7 text-neutral-600">{product.description}</p> },
-                { id: 'specifications', label: 'Specifications', content: (
-                  <ul className="space-y-3 text-sm text-neutral-600">{(product.features ?? []).map((f) => <li key={f} className="flex items-start gap-3"><span className="mt-1 h-2.5 w-2.5 rounded-full bg-brand-500" />{f}</li>)}</ul>
-                ) },
-                { id: 'reviews', label: 'Reviews', content: (<div className="space-y-4">{reviews.length ? reviews.map((r) => <ReviewCard key={r.id} review={r} />) : <p className="text-sm text-neutral-600">No reviews yet.</p>}</div>) }
-              ]} />
-            </div>
-          </section>
+          <PriceBlock price={product.price} salePrice={product.sale_price} rating={product.rating} reviewCount={product.review_count} />
 
-          <section>
-            <h3 className="text-lg font-semibold text-neutral-900">Related products</h3>
-            <div className="mt-4 grid grid-cols-2 gap-4 lg:grid-cols-3">
-              {related.slice(0, 6).map((item) => <ProductCard key={item.id} product={item} />)}
+          <div className="space-y-3">
+            <div>
+              <div className="mb-2 flex items-center justify-between">
+                <label className="text-xs font-semibold uppercase tracking-[0.12em] text-muted">Size</label>
+                <button type="button" className="text-xs font-semibold text-ink underline-offset-4 hover:underline" onClick={() => setAvailabilityOpen(true)}>
+                  View store availability
+                </button>
+              </div>
+              <SizeSelector sizes={product.sizes ?? []} value={size} onChange={setSize} />
             </div>
-          </section>
-        </main>
 
-        <aside className="lg:hidden">
-          <div className="rounded-2xl bg-white p-4 shadow">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-3">
               <div>
-                <h2 className="text-lg font-semibold text-neutral-900">{product.name}</h2>
-                <div className="text-sm text-neutral-500">{product.brand}</div>
+                <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.12em] text-muted">Quantity</label>
+                <QuantitySelector quantity={quantity} setQuantity={setQuantity} />
               </div>
-              <div>
-                <PriceBlock product={product} />
+              <div className="text-right">
+                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted">Stock at {nearestStore.city}</p>
+                <p className="mt-2 text-sm font-semibold text-success">
+                  {storeRows[0]?.stock > 0 ? `${storeRows[0].stock} pairs ready` : 'Reserve for later pickup'}
+                </p>
               </div>
-            </div>
-            <div className="mt-3">
-              <p className="text-sm font-semibold uppercase text-neutral-500">Select size</p>
-              <div className="mt-2"><SizeSelector sizes={product.sizes ?? ['6','7','8','9','10']} value={selectedSize} onChange={setSelectedSize} /></div>
-            </div>
-            <div className="mt-3">
-              <p className="text-sm font-semibold uppercase text-neutral-500">Quantity</p>
-              <div className="mt-2"><QuantitySelector quantity={quantity} setQuantity={setQuantity} /></div>
-            </div>
-            <div className="mt-4 flex gap-2">
-              <Button className="flex-1" size="lg" onClick={handleAddToCart}>Add to cart</Button>
-              <Button variant="outline" onClick={() => setModalOpen(true)}>Check</Button>
             </div>
           </div>
-        </aside>
-      </div>
 
-      {/* Mobile sticky buy bar */}
-      <div className="fixed bottom-0 left-0 right-0 z-50 block bg-white border-t border-neutral-200 p-3 md:hidden">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4">
-          <div>
-            <div className="text-sm text-neutral-600">{product.name}</div>
-            <div className="text-base font-semibold text-neutral-900"><PriceBlockInline product={product} /></div>
+          <div className="flex flex-wrap gap-3">
+            <Button onClick={() => void handleAddToCart(false)} disabled={saving} className="min-w-[170px]">
+              Add to Cart
+            </Button>
+              <Button variant="outline" onClick={() => void handleAddToCart(true)} disabled={saving} className="bg-white min-w-[150px]">
+                Buy Now
+              </Button>
+            <Button variant="secondary" onClick={handleWishlist} disabled={saving} className={`bg-white ${wishlisted ? 'border-ink' : ''}`}>
+              <HeartIcon className="h-4 w-4" />
+              {wishlisted ? 'Saved' : 'Wishlist'}
+            </Button>
           </div>
-          <div className="w-40">
-            <Button size="lg" className="w-full" onClick={handleAddToCart}>Add to cart</Button>
+
+          <div className="grid gap-3 sm:grid-cols-3">
+            <button type="button" onClick={() => setReserveModalOpen(true)} className="surface px-4 py-3 text-left transition-fast hover:-translate-y-0.5 hover:shadow-level2">
+              <MapPinIcon className="h-5 w-5 text-ink" />
+              <p className="mt-3 text-sm font-semibold text-ink">Reserve in Store</p>
+              <p className="mt-1 text-sm text-muted">{nearestStore.city} is the nearest suggestion.</p>
+            </button>
+            <div className="surface px-4 py-3">
+              <TruckIcon className="h-5 w-5 text-ink" />
+              <p className="mt-3 text-sm font-semibold text-ink">Delivery</p>
+              <p className="mt-1 text-sm text-muted">Choose home, store pickup, or express.</p>
+            </div>
+            <div className="surface px-4 py-3">
+              <ShieldIcon className="h-5 w-5 text-ink" />
+              <p className="mt-3 text-sm font-semibold text-ink">Secure checkout</p>
+              <p className="mt-1 text-sm text-muted">Protected route and session cart.</p>
+            </div>
+          </div>
+
+          <div className="surface p-4">
+            <div className="flex items-center gap-2 text-sm font-semibold text-ink">
+              <ArrowRightIcon className="h-4 w-4 text-accent" />
+              Distance-based suggestion
+            </div>
+            <div className="mt-3 flex flex-wrap items-center gap-3">
+              <Select value={selectedCity} onChange={(event) => setSelectedCity(event.target.value)} className="max-w-[220px]">
+                {['Kochi', 'Thrissur', 'Kozhikode', 'Bengaluru', 'Chennai'].map((city) => (
+                  <option key={city} value={city}>
+                    {city}
+                  </option>
+                ))}
+              </Select>
+              <p className="text-sm text-muted">
+                Based on {selectedCity}, the nearest store is <span className="font-semibold text-ink">{nearestStore.city}</span>.
+              </p>
+            </div>
           </div>
         </div>
-      </div>
+      </section>
 
-      <Modal open={modalOpen} title="Store availability" onClose={() => setModalOpen(false)}>
-        <div className="space-y-4 text-sm text-neutral-700">
-          <p>Check real-time stock at nearby stores before you choose pickup.</p>
-          {availLoading ? (
-            <div>Loading availability...</div>
-          ) : (
-            <ul className="space-y-4">
-              {availabilityStores.length ? availabilityStores.map((s) => (
-                <li key={s.id} className="rounded-3xl border border-neutral-200 bg-neutral-50 p-4">
-                  <p className="font-semibold text-neutral-900">{s.name}</p>
-                  <p className="mt-2 text-neutral-600">{s.stock > 0 ? `Available — ${s.stock} in stock for size ${selectedSize}` : 'Out of stock for selected size. Explore delivery.'}</p>
-                </li>
-              )) : (
-                <li className="rounded-3xl border border-neutral-200 bg-neutral-50 p-4">No store availability information.</li>
-              )}
-            </ul>
-          )}
+      <section className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
+        <div className="surface p-4">
+          <div className="flex flex-wrap gap-2 border-b border-border pb-3">
+            {['description', 'specs', 'reviews'].map((tab) => (
+              <button
+                key={tab}
+                type="button"
+                onClick={() => setActiveTab(tab as typeof activeTab)}
+                className={`rounded-md px-3 py-2 text-sm font-semibold transition-fast ${
+                  activeTab === tab ? 'bg-ink text-white' : 'border border-border bg-white text-ink hover:border-ink'
+                }`}
+              >
+                {tab === 'description' ? 'Description' : tab === 'specs' ? 'Specs' : 'Reviews'}
+              </button>
+            ))}
+          </div>
+
+          <div className="pt-4">
+            {activeTab === 'description' ? (
+              <div className="space-y-4 text-sm leading-7 text-muted">
+                <p>{product.description}</p>
+                <ul className="grid gap-2 sm:grid-cols-2">
+                  {(product.features ?? []).map((feature) => (
+                    <li key={feature} className="surface px-3 py-2 text-ink">
+                      {feature}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+            {activeTab === 'specs' ? (
+              <div className="grid gap-3 sm:grid-cols-2">
+                {[
+                  ['Category', product.category],
+                  ['Brand', product.brand],
+                  ['Price', formatMoney(product.sale_price ?? product.price)],
+                  ['Sizes', product.sizes?.join(', ') ?? 'N/A'],
+                  ['Colors', product.colors?.join(', ') ?? 'N/A'],
+                  ['Shipping', '3-5 business days'],
+                ].map(([label, value]) => (
+                  <div key={label} className="surface px-3 py-3">
+                    <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted">{label}</p>
+                    <p className="mt-1 text-sm font-semibold text-ink">{value}</p>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+            {activeTab === 'reviews' ? (
+              <div className="space-y-3">
+                {state.reviews.length ? state.reviews.map((review) => (
+                  <article key={review.id} className="surface px-4 py-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-sm font-semibold text-ink">{review.author}</p>
+                      <Badge variant="neutral">{review.rating}/5</Badge>
+                    </div>
+                    <p className="mt-2 text-sm font-semibold text-ink">{review.headline}</p>
+                    <p className="mt-1 text-sm leading-6 text-muted">{review.body}</p>
+                  </article>
+                )) : <p className="text-sm text-muted">No reviews yet.</p>}
+              </div>
+            ) : null}
+          </div>
+        </div>
+
+        <div className="surface p-4">
+          <p className="text-sm font-semibold text-ink">Related pairs</p>
+          <div className="mt-4 grid gap-3">
+            {state.related.slice(0, 3).map((item) => (
+              <Link key={item.id} to={`/product/${item.id}`} className="flex items-center gap-3 rounded-md border border-border p-2 transition-fast hover:border-ink">
+                <img src={item.image_url} alt={item.name} className="h-16 w-16 rounded-md object-cover" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted">{item.brand}</p>
+                  <p className="truncate text-sm font-semibold text-ink">{item.name}</p>
+                  <p className="text-sm text-muted">{formatMoney(item.sale_price ?? item.price)}</p>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <Modal open={availabilityOpen} onClose={() => setAvailabilityOpen(false)} title="Store availability">
+        <div className="space-y-4">
+          <div className="flex items-center gap-3">
+            <Select value={selectedCity} onChange={(event) => setSelectedCity(event.target.value)} className="max-w-[220px]">
+              {['Kochi', 'Thrissur', 'Kozhikode', 'Bengaluru', 'Chennai'].map((city) => (
+                <option key={city} value={city}>
+                  {city}
+                </option>
+              ))}
+            </Select>
+            <p className="text-sm text-muted">Sorted by proximity from {selectedCity}.</p>
+          </div>
+          <div className="grid gap-3">
+            {storeRows.map((store) => (
+              <div key={store.id} className="surface px-4 py-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="font-semibold text-ink">{store.name}</p>
+                    <p className="mt-1 text-sm text-muted">{formatDistance(store.distance)}</p>
+                  </div>
+                  <Badge variant={store.stock > 0 ? 'stock' : 'neutral'}>{store.stock > 0 ? `${store.stock} in stock` : 'Reserve'}</Badge>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       </Modal>
-    </Container>
+
+      <Modal open={reserveModalOpen} onClose={() => setReserveModalOpen(false)} title="Reserve in store">
+        <div className="space-y-4">
+          <p className="text-sm leading-6 text-muted">
+            Pick a store, hold the pair, and finish checkout when you are ready. This is the easiest way to avoid out-of-stock surprises.
+          </p>
+          <div className="grid gap-3">
+            {storeRows.slice(0, 3).map((store) => (
+              <div key={store.id} className="surface px-4 py-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="font-semibold text-ink">{store.name}</p>
+                    <p className="mt-1 text-sm text-muted">{formatDistance(store.distance)} away</p>
+                  </div>
+                  <Button variant="outline" className="bg-white" onClick={() => {
+                    setReserveModalOpen(false);
+                    void handleReserve();
+                  }}>
+                    Reserve
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </Modal>
+    </div>
   );
 };
 

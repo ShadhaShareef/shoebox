@@ -1,40 +1,143 @@
-import { Routes, Route, Navigate } from 'react-router-dom';
-import Header from './components/navigation/Header';
-import HomePage from './pages/HomePage';
-import ShopPage from './pages/ShopPage';
-import BrandsPage from './pages/BrandsPage';
-import BrandDetailPage from './pages/BrandDetailPage';
-import StoresPage from './pages/StoresPage';
-import LoginPage from './pages/LoginPage';
-import ProductDetailPage from './pages/ProductDetailPage';
-import CartPage from './pages/CartPage';
-import CheckoutPage from './pages/CheckoutPage';
-import OrderSuccessPage from './pages/OrderSuccessPage';
-import OrdersPage from './pages/OrdersPage';
+import { lazy, Suspense } from 'react';
+import { Navigate, Route, Routes, useParams } from 'react-router-dom';
+import AppShell from './components/layout/AppShell';
+import ProtectedRoute from './components/auth/ProtectedRoute';
+import GuestRoute from './components/auth/GuestRoute';
 
-function App() {
+const HomePage = lazy(() => import('./pages/HomePage'));
+const ShopPage = lazy(() => import('./pages/ShopPage'));
+const ProductDetailPage = lazy(() => import('./pages/ProductDetailPage'));
+const StoresPage = lazy(() => import('./pages/StoresPage'));
+const CartPage = lazy(() => import('./pages/CartPage'));
+const CheckoutPage = lazy(() => import('./pages/CheckoutPage'));
+const OrderSuccessPage = lazy(() => import('./pages/OrderSuccessPage'));
+const WishlistPage = lazy(() => import('./pages/WishlistPage'));
+const AccountDashboardPage = lazy(() => import('./pages/AccountDashboardPage'));
+const AccountProfilePage = lazy(() => import('./pages/AccountProfilePage'));
+const AccountAddressesPage = lazy(() => import('./pages/AccountAddressesPage'));
+const AccountOrdersPage = lazy(() => import('./pages/AccountOrdersPage'));
+const LoginPage = lazy(() => import('./pages/LoginPage'));
+const RegisterPage = lazy(() => import('./pages/RegisterPage'));
+const ForgotPasswordPage = lazy(() => import('./pages/ForgotPasswordPage'));
+
+const App = () => {
   return (
-    <div className="min-h-screen bg-neutral-50 text-neutral-900">
-      <Header />
-      <main className="space-y-10 py-8 lg:py-10">
+    <AppShell>
+      <Suspense fallback={<Fallback />}>
         <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/shop" element={<ShopPage />} />
-          <Route path="/shop/:category" element={<ShopPage />} />
-          <Route path="/brands" element={<BrandsPage />} />
-          <Route path="/brand/:brand" element={<BrandDetailPage />} />
-          <Route path="/stores" element={<StoresPage />} />
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/cart" element={<CartPage />} />
-          <Route path="/checkout" element={<CheckoutPage />} />
-          <Route path="/order/:orderId" element={<OrderSuccessPage />} />
-          <Route path="/orders" element={<OrdersPage />} />
           <Route path="/product/:id" element={<ProductDetailPage />} />
+          <Route path="/stores" element={<StoresPage />} />
+
+          <Route
+            path="/cart"
+            element={
+              <ProtectedRoute>
+                <CartPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/checkout"
+            element={
+              <ProtectedRoute>
+                <CheckoutPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/order-success/:orderId"
+            element={
+              <ProtectedRoute>
+                <OrderSuccessPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route path="/order/:orderId" element={<LegacyOrderRedirect />} />
+
+          <Route
+            path="/wishlist"
+            element={
+              <ProtectedRoute>
+                <WishlistPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/account/dashboard"
+            element={
+              <ProtectedRoute>
+                <AccountDashboardPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/account/profile"
+            element={
+              <ProtectedRoute>
+                <AccountProfilePage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/account/addresses"
+            element={
+              <ProtectedRoute>
+                <AccountAddressesPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/account/orders"
+            element={
+              <ProtectedRoute>
+                <AccountOrdersPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route path="/profile" element={<Navigate to="/account/profile" replace />} />
+          <Route path="/addresses" element={<Navigate to="/account/addresses" replace />} />
+
+          <Route
+            path="/login"
+            element={
+              <GuestRoute>
+                <LoginPage />
+              </GuestRoute>
+            }
+          />
+          <Route
+            path="/register"
+            element={
+              <GuestRoute>
+                <RegisterPage />
+              </GuestRoute>
+            }
+          />
+          <Route
+            path="/forgot-password"
+            element={
+              <GuestRoute>
+                <ForgotPasswordPage />
+              </GuestRoute>
+            }
+          />
+
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
-      </main>
-    </div>
+      </Suspense>
+    </AppShell>
   );
-}
+};
+
+const Fallback = () => (
+  <div className="surface p-6 text-sm text-muted">Loading Shoebox...</div>
+);
+
+const LegacyOrderRedirect = () => {
+  const { orderId } = useParams();
+  return <Navigate to={`/order-success/${orderId ?? ''}`} replace />;
+};
 
 export default App;

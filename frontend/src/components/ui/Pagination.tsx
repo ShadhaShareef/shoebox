@@ -1,5 +1,3 @@
-import type { MouseEventHandler } from 'react';
-
 type PaginationProps = {
   page: number;
   pageSize: number;
@@ -19,14 +17,14 @@ const Pagination = ({ page, pageSize, total, onPageChange }: PaginationProps) =>
     <button
       type="button"
       onClick={() => onPageChange(pageNumber)}
-      className={`rounded-xl border px-3 py-2 text-sm transition ${pageNumber === page ? 'border-brand-500 bg-brand-600 text-white' : 'border-neutral-200 bg-white text-neutral-700 hover:border-neutral-300 hover:bg-neutral-50'}`}
+      className={`rounded-md border px-3 py-2 text-sm transition-fast ${pageNumber === page ? 'border-ink bg-ink text-white' : 'border-border bg-white text-ink hover:border-ink hover:bg-paper'}`}
     >
       {pageNumber}
     </button>
   );
 
   return (
-    <nav className="flex flex-wrap items-center gap-2">
+    <nav className="flex flex-wrap items-center gap-2" aria-label="Pagination">
       {pages.map(renderButton)}
     </nav>
   );

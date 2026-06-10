@@ -6,7 +6,7 @@ const Checkbox = ({ className = '', ...props }: CheckboxProps) => {
   return (
     <input
       type="checkbox"
-      className={`h-5 w-5 rounded-lg border border-neutral-300 text-brand-600 focus:ring-brand-400 ${className}`}
+      className={`h-4 w-4 rounded border-border text-ink focus:ring-ink/20 ${className}`}
       {...props}
     />
   );

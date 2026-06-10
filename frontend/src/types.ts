@@ -39,6 +39,8 @@ export type Store = {
   distance: string;
   hours: string;
   availability: string;
+  phone?: string;
+  email?: string;
 };
 
 export type Review = {
@@ -48,4 +50,42 @@ export type Review = {
   headline: string;
   body: string;
   created_at: string;
+};
+
+export type UserProfile = {
+  id: number;
+  email: string;
+  firstName: string;
+  lastName: string;
+  phone: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type Address = {
+  id: number;
+  label: string | null;
+  addressLine1: string;
+  addressLine2: string | null;
+  city: string | null;
+  state: string | null;
+  pincode: string | null;
+  phone: string | null;
+  isDefault: boolean;
+};
+
+export type AccountResponse = {
+  user: UserProfile;
+  addresses: Address[];
+};
+
+export type OrderSummary = {
+  id: number;
+  orderNumber: string;
+  status: string;
+  totalAmount: number;
+  items: number;
+  paymentMethod: string;
+  deliveryMethod: string;
+  createdAt: string;
 };

@@ -15,13 +15,13 @@ type TabsProps = {
 const Tabs = ({ tabs, activeId, onChange }: TabsProps) => {
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap gap-3 border-b border-neutral-200 pb-3">
+      <div className="flex flex-wrap gap-2 border-b border-border pb-3">
         {tabs.map((tab) => (
           <button
             key={tab.id}
             type="button"
             onClick={() => onChange(tab.id)}
-            className={`rounded-full px-4 py-2 text-sm font-semibold transition ${activeId === tab.id ? 'bg-brand-600 text-white' : 'bg-neutral-100 text-neutral-700 hover:bg-neutral-200'}`}
+            className={`rounded-md px-3 py-2 text-sm font-semibold transition-fast ${activeId === tab.id ? 'bg-ink text-white' : 'bg-white text-muted border border-border hover:border-ink hover:text-ink'}`}
           >
             {tab.label}
           </button>

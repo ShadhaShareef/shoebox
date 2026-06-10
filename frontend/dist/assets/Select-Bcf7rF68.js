@@ -1,0 +1,1 @@
+import{x as o}from"./index-t-FlJ_RV.js";const n=({className:e="",children:r,...t})=>o.jsx("select",{className:`w-full rounded-md border border-border bg-white px-3.5 py-3 pr-10 text-sm text-ink outline-none transition-fast focus:border-ink focus:ring-2 focus:ring-ink/10 disabled:bg-neutral-100 ${e}`,...t,children:r});export{n as S};

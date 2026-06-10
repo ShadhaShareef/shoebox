@@ -23,14 +23,14 @@ const Modal = ({ open, title, onClose, children }: ModalProps) => {
 
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
-      <div className="w-full max-w-2xl overflow-hidden rounded-[28px] bg-white shadow-lg shadow-black/10">
-        <div className="flex items-center justify-between border-b border-neutral-200 px-6 py-5">
-          <h2 className="text-lg font-semibold text-neutral-900">{title}</h2>
-          <button type="button" className="rounded-full border border-neutral-200 bg-white px-3 py-2 text-neutral-700 transition hover:bg-neutral-50" onClick={onClose}>
+      <div className="w-full max-w-3xl overflow-hidden rounded-md bg-white shadow-level3">
+        <div className="flex items-center justify-between border-b border-border px-4 py-4 sm:px-6">
+          <h2 className="text-base font-semibold text-ink">{title}</h2>
+          <button type="button" className="rounded-md border border-border bg-white px-3 py-2 text-sm text-ink transition-fast hover:bg-paper" onClick={onClose}>
             Close
           </button>
         </div>
-        <div className="p-6">{children}</div>
+        <div className="p-4 sm:p-6">{children}</div>
       </div>
     </div>,
     document.body

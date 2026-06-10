@@ -1,174 +1,141 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import type { Brand, Category, Product, Store } from '../types';
-import { fetchBrands, fetchCategories, fetchProducts, fetchStores } from '../lib/api';
-import Container from '../components/layout/Container';
 import ProductCard from '../components/cards/ProductCard';
-import CategoryCard from '../components/cards/CategoryCard';
-import BrandCard from '../components/cards/BrandCard';
-import StoreCard from '../components/cards/StoreCard';
 import Button from '../components/ui/Button';
+import Container from '../components/layout/Container';
+import PageHeader from '../components/layout/PageHeader';
+import { fetchProducts } from '../lib/api';
+import { brandStory, collections } from '../lib/retail';
+import { formatMoney } from '../lib/format';
+import type { Product } from '../types';
+import { ArrowRightIcon, CheckIcon, MapPinIcon, ShieldIcon, TruckIcon } from '../components/ui/icons';
+
+const retailBenefits = [
+  { title: 'Fast browse, fast buy', detail: 'Clear product paths, no clutter, and direct checkout flow.', icon: ArrowRightIcon },
+  { title: 'Store stock visible', detail: 'See availability by store before you commit to a pair.', icon: MapPinIcon },
+  { title: 'Protected checkout', detail: 'Session-based cart and secure account routing.', icon: ShieldIcon },
+  { title: 'Delivery clarity', detail: 'Clear shipping methods and arrival estimates every time.', icon: TruckIcon },
+];
 
 const HomePage = () => {
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [brands, setBrands] = useState<Brand[]>([]);
-  const [products, setProducts] = useState<Product[]>([]);
-  const [stores, setStores] = useState<Store[]>([]);
+  const [featured, setFeatured] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const load = async () => {
+    let active = true;
+    (async () => {
       try {
-        const [categoryResponse, brandResponse, productResponse, storeResponse] = await Promise.all([
-          fetchCategories(),
-          fetchBrands(),
-          fetchProducts({ sort: 'best', limit: 8 }),
-          fetchStores(),
-        ]);
-
-        setCategories(categoryResponse.categories);
-        setBrands(brandResponse.brands);
-        setProducts(productResponse.items);
-        setStores(storeResponse.stores.slice(0, 3));
+        const response = await fetchProducts({ sort: 'newest', limit: 4 });
+        if (!active) return;
+        setFeatured(response.items);
       } finally {
-        setLoading(false);
+        if (active) setLoading(false);
       }
+    })();
+    return () => {
+      active = false;
     };
-    load();
   }, []);
 
   return (
-    <Container className="space-y-16 pb-12 pt-8 lg:pb-16 lg:pt-10">
-      <section className="grid gap-10 xl:grid-cols-[1.2fr_0.8fr] xl:items-center">
+    <div className="space-y-10">
+      <section className="grid gap-6 lg:grid-cols-[1.05fr_0.95fr] lg:items-center">
         <div className="space-y-6">
-          <p className="inline-flex rounded-full bg-brand-50 px-4 py-1 text-xs font-semibold uppercase tracking-[0.28em] text-brand-700">Premium footwear in Kerala</p>
-          <h1 className="max-w-3xl text-4xl font-semibold tracking-tight text-neutral-900 sm:text-5xl">
-            Discover local premium sneakers, everyday runners, and curated brand drops.
-          </h1>
-          <p className="max-w-2xl text-base leading-8 text-neutral-600 sm:text-lg">
-            Shoebox blends modern footwear design with approachable store experiences, fast delivery, and store pickup across Kerala.
-          </p>
-          <div className="flex flex-col gap-4 sm:flex-row">
+          <div className="space-y-3">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">Shoebox retail system</p>
+            <h1 className="max-w-xl text-4xl font-semibold leading-tight text-ink sm:text-5xl">{brandStory.headline}</h1>
+            <p className="max-w-xl text-base leading-7 text-muted">{brandStory.subhead}</p>
+          </div>
+          <div className="flex flex-wrap gap-3">
             <Link to="/shop">
-              <Button size="lg">Shop the collection</Button>
+              <Button size="lg">Shop now</Button>
             </Link>
             <Link to="/stores">
-              <Button variant="secondary" size="lg">Find a store</Button>
+              <Button variant="outline" size="lg" className="bg-white">
+                Find a store
+              </Button>
             </Link>
           </div>
+          <div className="grid gap-3 sm:grid-cols-3">
+            {['Free returns', 'Reserve in store', 'Checkout in minutes'].map((item) => (
+              <div key={item} className="surface px-4 py-3">
+                <div className="flex items-center gap-2 text-sm font-semibold text-ink">
+                  <CheckIcon className="h-4 w-4 text-success" />
+                  {item}
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div className="rounded-[28px] bg-brand-900 p-8 text-white shadow-lg shadow-brand-500/10">
-            <p className="text-sm uppercase tracking-[0.28em] text-brand-200">Fast delivery</p>
-            <h2 className="mt-5 text-2xl font-semibold">Get the latest styles before your next week.</h2>
-            <p className="mt-4 text-sm leading-7 text-brand-100">Order now and choose express delivery or convenient store pickup from nearby Shoebox stores.</p>
-          </div>
-          <div className="rounded-[28px] border border-neutral-200 bg-white p-8 shadow-sm">
-            <p className="text-sm uppercase tracking-[0.28em] text-neutral-500">Style guide</p>
-            <h2 className="mt-5 text-2xl font-semibold text-neutral-900">Street-ready, comfortable footwear for every routine.</h2>
-            <p className="mt-4 text-sm leading-7 text-neutral-600">Browse curated collections for running, weekend looks, and premium everyday silhouettes.</p>
-          </div>
+
+        <div className="surface overflow-hidden">
+          {featured[0] ? (
+            <Link to={`/product/${featured[0].id}`} className="block">
+              <img src={featured[0].image_url} alt={featured[0].name} className="aspect-[4/3] w-full object-cover" />
+              <div className="flex items-end justify-between gap-4 p-4">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted">{featured[0].brand}</p>
+                  <h2 className="mt-1 text-lg font-semibold text-ink">{featured[0].name}</h2>
+                </div>
+                <p className="text-lg font-semibold text-ink">{formatMoney(featured[0].sale_price ?? featured[0].price)}</p>
+              </div>
+            </Link>
+          ) : (
+            <div className="aspect-[4/3] bg-white" />
+          )}
         </div>
       </section>
 
-      <section className="space-y-6">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <p className="text-sm uppercase tracking-[0.28em] text-neutral-500">Featured categories</p>
-            <h2 className="mt-2 text-3xl font-semibold text-neutral-900">Shop by category</h2>
-          </div>
-          <p className="text-sm text-neutral-600">A curated entry point to the latest arrivals and best sellers.</p>
-        </div>
-        <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-4">
-          {categories.slice(0, 4).map((category) => (
-            <CategoryCard key={category.slug} category={category} />
+      <section className="space-y-4">
+        <PageHeader
+          eyebrow="Collections"
+          title="Browse by intent"
+          subtitle="The categories stay simple so shoppers can move straight to the pair they want."
+        />
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+          {collections.map((collection) => (
+            <Link key={collection.slug} to={`/shop?category=${collection.slug}`} className="surface px-4 py-4 transition-fast hover:-translate-y-0.5 hover:shadow-level2">
+              <p className="text-sm font-semibold text-ink">{collection.label}</p>
+              <p className="mt-2 text-sm leading-6 text-muted">{itemCopy(collection.slug)}</p>
+            </Link>
           ))}
         </div>
       </section>
 
-      <section className="space-y-6">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <p className="text-sm uppercase tracking-[0.28em] text-neutral-500">Best sellers</p>
-            <h2 className="mt-2 text-3xl font-semibold text-neutral-900">Most loved footwear</h2>
-          </div>
-          <Button variant="outline">View all sneakers</Button>
-        </div>
-        <div className="grid gap-6 lg:grid-cols-2 xl:grid-cols-4">
-          {products.slice(0, 4).map((product) => (
-            <ProductCard key={product.id} product={product} />
-          ))}
-        </div>
-      </section>
-
-      <section className="space-y-6">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <p className="text-sm uppercase tracking-[0.28em] text-neutral-500">New arrivals</p>
-            <h2 className="mt-2 text-3xl font-semibold text-neutral-900">Fresh drops for the season</h2>
-          </div>
-          <p className="text-sm text-neutral-600">Modern silhouettes, premium materials, and launch-ready designs.</p>
-        </div>
-        <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-4">
-          {products.slice(4, 8).map((product) => (
-            <ProductCard key={product.id} product={product} />
-          ))}
+      <section className="space-y-4">
+        <PageHeader eyebrow="Retail advantage" title="Built for conversion" subtitle="The interface keeps attention on product, price, and store availability." />
+        <div className="grid gap-3 lg:grid-cols-4">
+          {retailBenefits.map((benefit) => {
+            const Icon = benefit.icon;
+            return (
+              <div key={benefit.title} className="surface p-4">
+                <Icon className="h-5 w-5 text-ink" />
+                <h3 className="mt-4 text-sm font-semibold text-ink">{benefit.title}</h3>
+                <p className="mt-2 text-sm leading-6 text-muted">{benefit.detail}</p>
+              </div>
+            );
+          })}
         </div>
       </section>
 
-      <section className="space-y-6">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <p className="text-sm uppercase tracking-[0.28em] text-neutral-500">Popular brands</p>
-            <h2 className="mt-2 text-3xl font-semibold text-neutral-900">Brands you trust</h2>
-          </div>
-          <Link to="/brands">
-            <Button variant="secondary">Browse brands</Button>
-          </Link>
-        </div>
-        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {brands.slice(0, 6).map((brand) => (
-            <BrandCard key={brand.slug} brand={brand} />
-          ))}
+      <section className="space-y-4">
+        <PageHeader eyebrow="Featured" title="Latest arrivals" subtitle="A tight grid of products with the details customers actually scan." action={<Link to="/shop"><Button variant="outline" className="bg-white">View all</Button></Link>} />
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          {loading
+            ? Array.from({ length: 4 }).map((_, index) => <div key={index} className="surface aspect-[4/5] animate-pulse bg-white" />)
+            : featured.map((product) => <ProductCard key={product.id} product={product} />)}
         </div>
       </section>
-
-      <section className="space-y-6">
-        <div className="rounded-[28px] border border-neutral-200 bg-white p-8 shadow-sm">
-          <div className="grid gap-8 lg:grid-cols-[1fr_0.9fr] lg:items-center">
-            <div className="space-y-4">
-              <p className="text-sm uppercase tracking-[0.28em] text-neutral-500">Trusted service</p>
-              <h2 className="text-3xl font-semibold text-neutral-900">Fast local pickup and citywide shipping</h2>
-              <p className="max-w-2xl text-sm leading-7 text-neutral-600">
-                Choose same-day store pickup from our Kerala stores or get secure delivery to your doorstep with weekend delivery options.
-              </p>
-            </div>
-            <div className="grid gap-4 sm:grid-cols-2">
-              {stores.map((store) => (
-                <StoreCard key={store.id} store={store} />
-              ))}
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section className="rounded-[28px] border border-neutral-200 bg-white p-8 shadow-sm">
-        <div className="grid gap-8 lg:grid-cols-[1.6fr_1fr] lg:items-center">
-          <div>
-            <p className="text-sm uppercase tracking-[0.28em] text-neutral-500">Newsletter</p>
-            <h2 className="mt-2 text-3xl font-semibold text-neutral-900">Stay ahead with new releases and offers.</h2>
-            <p className="mt-4 max-w-xl text-sm leading-7 text-neutral-600">
-              Subscribe for curated launches, local store events, and early access to limited footwear drops.
-            </p>
-          </div>
-          <form className="grid gap-4 sm:grid-cols-[1.8fr_0.8fr]">
-            <input type="email" placeholder="Enter your email" className="w-full rounded-3xl border border-neutral-200 bg-neutral-50 px-5 py-4 text-sm text-neutral-900 outline-none transition focus:border-brand-400 focus:ring-2 focus:ring-brand-100" />
-            <Button type="submit" size="lg">Subscribe</Button>
-          </form>
-        </div>
-      </section>
-    </Container>
+    </div>
   );
 };
+
+const itemCopy = (slug: string) => ({
+  running: 'Responsive comfort for regular mileage.',
+  lifestyle: 'Everyday silhouettes with a clean profile.',
+  training: 'Supportive pairs for mixed workouts.',
+  court: 'Grip and lateral control for quick cuts.',
+  sandals: 'Easy-wear options for warm days.',
+}[slug] ?? 'A focused edit of shoes that sell well.');
 
 export default HomePage;

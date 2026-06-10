@@ -1,112 +1,225 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import type { CartResponse } from '../lib/api';
-import { fetchCart } from '../lib/api';
-import Container from '../components/layout/Container';
+import PageHeader from '../components/layout/PageHeader';
+import Drawer from '../components/ui/Drawer';
 import Button from '../components/ui/Button';
+import Badge from '../components/ui/Badge';
+import { clearCart, fetchCart, removeCartItem, updateCartItem } from '../lib/api';
+import { formatMoney } from '../lib/format';
+import type { CartItem } from '../lib/api';
+import { MinusIcon, PlusIcon, CloseIcon, ArrowRightIcon } from '../components/ui/icons';
 
 const CartPage = () => {
-  const [cart, setCart] = useState<CartResponse | null>(null);
-  const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
+  const [items, setItems] = useState<CartItem[]>([]);
+  const [subtotal, setSubtotal] = useState(0);
+  const [shipping, setShipping] = useState(0);
+  const [tax, setTax] = useState(0);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [summaryOpen, setSummaryOpen] = useState(false);
+  const [busyItem, setBusyItem] = useState<string | null>(null);
+
+  const loadCart = async () => {
+    const response = await fetchCart();
+    setItems(response.items);
+    setSubtotal(response.subtotal);
+    setShipping(response.shipping);
+    setTax(response.tax);
+    setTotal(response.total);
+  };
 
   useEffect(() => {
-    const load = async () => {
+    let active = true;
+    (async () => {
       try {
-        const response = await fetchCart();
-        setCart(response);
-      } catch {
-        setCart({ items: [], subtotal: 0, shipping: 0, tax: 0, total: 0 });
+        await loadCart();
       } finally {
-        setLoading(false);
+        if (active) setLoading(false);
       }
+    })();
+    return () => {
+      active = false;
     };
-    load();
   }, []);
 
-  const empty = !cart || cart.items.length === 0;
+  const itemCount = useMemo(() => items.reduce((sum, item) => sum + item.quantity, 0), [items]);
+
+  const handleUpdate = async (item: CartItem, nextQuantity: number) => {
+    const key = `${item.product_id}-${item.size ?? ''}`;
+    setBusyItem(key);
+    try {
+      await updateCartItem({ product_id: item.product_id, quantity: nextQuantity, size: item.size });
+      await loadCart();
+      window.dispatchEvent(new Event('cart:updated'));
+    } finally {
+      setBusyItem(null);
+    }
+  };
+
+  const handleRemove = async (item: CartItem) => {
+    const key = `${item.product_id}-${item.size ?? ''}`;
+    setBusyItem(key);
+    try {
+      await removeCartItem({ product_id: item.product_id, size: item.size });
+      await loadCart();
+      window.dispatchEvent(new Event('cart:updated'));
+    } finally {
+      setBusyItem(null);
+    }
+  };
+
+  const handleClear = async () => {
+    await clearCart();
+    await loadCart();
+    window.dispatchEvent(new Event('cart:updated'));
+  };
 
   return (
-    <Container className="space-y-8 pb-12 pt-8 lg:pb-16 lg:pt-10">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <p className="text-sm uppercase tracking-[0.28em] text-neutral-500">Your cart</p>
-          <h1 className="mt-2 text-3xl font-semibold text-neutral-900">Ready to checkout</h1>
-        </div>
-        <div className="rounded-3xl border border-neutral-200 bg-white p-4 shadow-sm">
-          <p className="text-sm text-neutral-500">Estimated total</p>
-          <p className="mt-2 text-2xl font-semibold text-neutral-900">₹{cart ? cart.total : '0'}</p>
-        </div>
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        eyebrow="Cart"
+        title="Your Shoebox"
+        subtitle="A clean item list, clear totals, and one strong path to checkout."
+        action={<Badge variant="neutral">{itemCount} item{itemCount === 1 ? '' : 's'}</Badge>}
+      />
 
       {loading ? (
-        <div className="rounded-[32px] border border-neutral-200 bg-white p-8 shadow-sm">Loading your cart...</div>
-      ) : empty ? (
-        <div className="rounded-[32px] border border-neutral-200 bg-white p-8 shadow-sm text-center">
-          <p className="text-xl font-semibold text-neutral-900">Your cart is empty</p>
-          <p className="mt-2 text-sm text-neutral-600">Add a pair to your cart and come back here to checkout.</p>
-          <Link to="/shop" className="mt-6 inline-flex rounded-2xl bg-brand-600 px-6 py-3 text-sm font-semibold text-white transition hover:bg-brand-700">
-            Continue shopping
+        <div className="surface p-6 text-sm text-muted">Loading cart...</div>
+      ) : items.length === 0 ? (
+        <div className="surface px-6 py-10 text-center">
+          <h2 className="text-lg font-semibold text-ink">Your box is empty</h2>
+          <p className="mt-2 text-sm leading-6 text-muted">Add a pair, reserve in store, or continue browsing the shelf.</p>
+          <Link to="/shop">
+            <Button className="mt-4">Continue shopping</Button>
           </Link>
         </div>
       ) : (
-        <div className="grid gap-8 lg:grid-cols-[1.5fr_0.9fr]">
-          <section className="space-y-6 rounded-[32px] border border-neutral-200 bg-white p-8 shadow-sm">
-            <div className="flex items-center justify-between gap-4">
-              <div>
-                <h2 className="text-xl font-semibold text-neutral-900">Items in your cart</h2>
-                <p className="text-sm text-neutral-500">Review your selected products before checkout.</p>
-              </div>
-            </div>
-            <div className="space-y-4">
-              {cart.items.map((item) => (
-                <div key={`${item.product_id}-${item.size ?? 'default'}`} className="rounded-3xl border border-neutral-200 bg-neutral-50 p-4 sm:p-5">
-                  <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                      <p className="text-base font-semibold text-neutral-900">{item.product?.name ?? 'Product'}</p>
-                      <p className="mt-1 text-sm text-neutral-500">{item.product?.brand ?? ''}</p>
-                      {item.size ? <p className="mt-2 text-sm text-neutral-600">Size: {item.size}</p> : null}
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
+          <div className="space-y-3">
+            {items.map((item) => {
+              const product = item.product;
+              const key = `${item.product_id}-${item.size ?? ''}`;
+              const price = product?.sale_price ?? product?.price ?? 0;
+              return (
+                <article key={key} className="surface flex gap-4 p-4">
+                  <Link to={`/product/${item.product_id}`} className="shrink-0">
+                    <img src={product?.image_url ?? ''} alt={product?.name ?? 'Product'} className="h-24 w-24 rounded-md object-cover" />
+                  </Link>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted">{product?.brand}</p>
+                        <Link to={`/product/${item.product_id}`} className="block truncate text-sm font-semibold text-ink">
+                          {product?.name}
+                        </Link>
+                        <p className="mt-1 text-sm text-muted">
+                          Size {item.size || 'n/a'} • {formatMoney(price)}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-border bg-white text-ink transition-fast hover:border-ink"
+                        aria-label={`Remove ${product?.name ?? 'item'}`}
+                        onClick={() => void handleRemove(item)}
+                        disabled={busyItem === key}
+                      >
+                        <CloseIcon className="h-4 w-4" />
+                      </button>
                     </div>
-                    <div className="text-right">
-                      <p className="text-sm text-neutral-500">Qty {item.quantity}</p>
-                      <p className="mt-2 text-lg font-semibold text-neutral-900">₹{((item.product?.sale_price ?? item.product?.price ?? 0) * item.quantity).toFixed(0)}</p>
+
+                    <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+                      <div className="inline-flex items-center gap-1 rounded-md border border-border bg-white p-1">
+                        <button
+                          type="button"
+                          className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-border text-ink transition-fast hover:border-ink"
+                          onClick={() => void handleUpdate(item, Math.max(1, item.quantity - 1))}
+                          aria-label="Decrease quantity"
+                          disabled={busyItem === key}
+                        >
+                          <MinusIcon className="h-4 w-4" />
+                        </button>
+                        <span className="inline-flex h-9 min-w-10 items-center justify-center px-2 text-sm font-semibold">{item.quantity}</span>
+                        <button
+                          type="button"
+                          className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-border text-ink transition-fast hover:border-ink"
+                          onClick={() => void handleUpdate(item, item.quantity + 1)}
+                          aria-label="Increase quantity"
+                          disabled={busyItem === key}
+                        >
+                          <PlusIcon className="h-4 w-4" />
+                        </button>
+                      </div>
+                      <p className="text-base font-semibold text-ink">{formatMoney(price * item.quantity)}</p>
                     </div>
                   </div>
-                </div>
-              ))}
-            </div>
-          </section>
+                </article>
+              );
+            })}
+          </div>
 
-          <aside className="space-y-6">
-            <div className="rounded-[32px] border border-neutral-200 bg-white p-8 shadow-sm">
-              <h2 className="text-lg font-semibold text-neutral-900">Order summary</h2>
-              <div className="mt-6 space-y-3 text-sm text-neutral-600">
-                <div className="flex items-center justify-between">
-                  <span>Subtotal</span>
-                  <span>₹{cart.subtotal}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span>Shipping</span>
-                  <span>₹{cart.shipping}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span>Tax</span>
-                  <span>₹{cart.tax}</span>
+          <aside className="hidden lg:block">
+            <div className="sticky top-24 surface p-4">
+              <h2 className="text-sm font-semibold text-ink">Order summary</h2>
+              <div className="mt-4 space-y-2 text-sm">
+                <Row label="Subtotal" value={formatMoney(subtotal)} />
+                <Row label="Shipping" value={shipping === 0 ? 'Free' : formatMoney(shipping)} />
+                <Row label="Tax" value={formatMoney(tax)} />
+                <div className="border-t border-border pt-2">
+                  <Row label="Total" value={formatMoney(total)} strong />
                 </div>
               </div>
-              <div className="mt-6 flex items-center justify-between border-t border-neutral-200 pt-5 text-lg font-semibold text-neutral-900">
-                <span>Total</span>
-                <span>₹{cart.total}</span>
-              </div>
-              <Button size="lg" className="mt-6 w-full" onClick={() => navigate('/checkout')}>
-                Proceed to checkout
+              <Button className="mt-4 w-full" onClick={() => navigate('/checkout')}>
+                Proceed to Checkout
+                <ArrowRightIcon className="h-4 w-4" />
               </Button>
+              <p className="mt-2 text-center text-xs font-semibold uppercase tracking-[0.12em] text-muted">Seal The Box</p>
+              <button type="button" onClick={() => void handleClear()} className="mt-4 w-full rounded-md border border-border px-3 py-3 text-sm font-semibold text-ink transition-fast hover:border-ink">
+                Clear cart
+              </button>
             </div>
           </aside>
         </div>
       )}
-    </Container>
+
+      <div className="fixed inset-x-0 bottom-20 z-30 border-t border-border bg-white/98 px-4 py-3 md:hidden">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted">Total</p>
+            <p className="text-base font-semibold text-ink">{formatMoney(total)}</p>
+          </div>
+          <Button onClick={() => setSummaryOpen(true)}>
+            Proceed to Checkout
+          </Button>
+        </div>
+        <p className="mt-2 text-center text-xs font-semibold uppercase tracking-[0.12em] text-muted">Seal The Box</p>
+      </div>
+
+      <Drawer open={summaryOpen} onClose={() => setSummaryOpen(false)} title="Order summary">
+        <div className="space-y-3">
+          <Row label="Subtotal" value={formatMoney(subtotal)} />
+          <Row label="Shipping" value={shipping === 0 ? 'Free' : formatMoney(shipping)} />
+          <Row label="Tax" value={formatMoney(tax)} />
+          <div className="border-t border-border pt-2">
+            <Row label="Total" value={formatMoney(total)} strong />
+          </div>
+          <Button className="w-full" onClick={() => navigate('/checkout')}>
+            Proceed to Checkout
+          </Button>
+          <button type="button" onClick={() => void handleClear()} className="w-full rounded-md border border-border px-3 py-3 text-sm font-semibold text-ink transition-fast hover:border-ink">
+            Clear cart
+          </button>
+        </div>
+      </Drawer>
+    </div>
   );
 };
+
+const Row = ({ label, value, strong }: { label: string; value: string; strong?: boolean }) => (
+  <div className={`flex items-center justify-between gap-3 ${strong ? 'text-base font-semibold text-ink' : 'text-sm text-muted'}`}>
+    <span>{label}</span>
+    <span className={strong ? 'text-ink' : 'text-ink'}>{value}</span>
+  </div>
+);
 
 export default CartPage;

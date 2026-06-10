@@ -1,50 +1,130 @@
+﻿@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
-  color-scheme: light;
-  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  background-color: #f8fafc;
-  color: #111827;
+  /* Base Layer – Neutral Foundation */
+  --bg-base:            #F8F7F3;   /* page background */
+  --bg-surface:         #FFFFFF;   /* cards, modals */
+  --bg-surface-alt:     #F3F4F6;   /* secondary cards */
+  --border-color:       #E5E7EB;   /* generic borders */
+
+  /* Text */
+  --text-primary:       #111827;   /* main copy */
+  --text-secondary:     #6B7280;   /* subtitles */
+  --text-muted:         #9CA3AF;   /* disabled / hint */
+
+  /* Functional (system) */
+  --success:            #4C9F70;   /* in‑stock */
+  --error:              #EF4444;   /* out‑of‑stock */
+  --warning:            #F59E0B;   /* low stock */
+  --info:               #3B82F6;   /* system hints */
+
+  /* Brand Accent – Core Identity */
+  --cta-primary:        #FF6B3D;   /* main CTA */
+  --cta-gradient-start:  #FF6B3D;
+  --cta-gradient-end:    #FFB020;
+  --accent-amber:        #FFB020;   /* discounts, new tags */
+  --accent-blue:         #4DA3FF;   /* store links */
+  --accent-purple:       #6D5EF6;   /* wishlist active */
+
+  /* Opacity Overlays */
+  --overlay-hover:      rgba(17,24,39,0.04);
+  --overlay-active:     rgba(17,24,39,0.08);
+  --disabled-bg:        #D1D5DB;
 }
 
-* {
-  box-sizing: border-box;
-}
-
-html {
-  scroll-behavior: smooth;
-}
+html { scroll-behavior: smooth; }
 
 body {
   margin: 0;
   min-height: 100vh;
-  background: #f8fafc;
-  color: #111827;
+  background: var(--bg-base);
+  color: var(--text-primary);
+  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
 
-button,
-input,
-select,
-textarea {
-  font: inherit;
+* { box-sizing: border-box; }
+
+img { display: block; max-width: 100%; }
+
+a { color: inherit; text-decoration: none; }
+
+button, input, select, textarea { font: inherit; }
+
+:focus-visible { outline: 2px solid var(--cta-primary); outline-offset: 2px; }
+
+h1, h2, h3, h4, h5, h6 { font-family: 'Inter', system-ui, sans-serif; }
+
+/* Utility helpers */
+.bg-base { background: var(--bg-base); }
+.surface { background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: 8px; }
+.surface-alt { background: var(--bg-surface-alt); border: 1px solid var(--border-color); border-radius: 8px; }
+.text-primary { color: var(--text-primary); }
+.text-secondary { color: var(--text-secondary); }
+.text-muted { color: var(--text-muted); }
+
+/* Buttons */
+.btn-primary {
+  color: #fff;
+  background: linear-gradient(to right, var(--cta-gradient-start), var(--cta-gradient-end));
+  border: none;
+  border-radius: 6px;
+  padding: .5rem 1rem;
+  cursor: pointer;
+  transition: background 0.2s, opacity 0.2s;
+}
+.btn-primary:hover   { background: var(--overlay-hover); }
+.btn-primary:active  { background: var(--overlay-active); }
+.btn-primary:disabled { background: var(--disabled-bg); color: var(--text-muted); cursor: not-allowed; }
+
+.btn-secondary {
+  color: var(--text-primary);
+  background: transparent;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: .5rem 1rem;
+  cursor: pointer;
+}
+.btn-secondary:hover   { background: var(--overlay-hover); }
+.btn-secondary:active  { background: var(--overlay-active); }
+
+/* Badges */
+.badge { display: inline-block; padding: .25rem .5rem; font-size: .75rem; font-weight: 600; border-radius: 4px; }
+.badge--new      { background: var(--accent-amber); color: #fff; }
+.badge--discount { background: var(--accent-amber); color: #fff; }
+.badge--limited  { background: var(--accent-amber); color: #fff; }
+
+/* Stock labels */
+.stock--in  { color: var(--success); }
+.stock--low { color: var(--warning); }
+.stock--out { color: var(--error); }
+
+/* Navigation */
+.nav { display: flex; gap: 1rem; list-style: none; }
+.nav__item { color: var(--text-secondary); }
+.nav__item:hover { color: var(--text-primary); }
+.nav__item--active { color: var(--cta-primary); }
+
+/* Wishlist */
+.wishlist--inactive { color: var(--text-muted); }
+.wishlist--active   { color: var(--accent-purple); }
+
+/* Links / Store locations */
+.link, .store-location { color: var(--accent-blue); text-decoration: underline; }
+.link:hover, .store-location:hover { opacity: .85; }
+
+/* Overlays */
+.overlay-hover  { background: var(--overlay-hover); }
+.overlay-active { background: var(--overlay-active); }
+
+/* Disabled generic */
+.disabled, [disabled] { background: var(--disabled-bg) !important; color: var(--text-muted) !important; cursor: not-allowed !important; }
+
+@media (min-width: 768px) {
+  .safe-bottom { padding-bottom: 0; }
 }
 
-a {
-  color: inherit;
-  text-decoration: none;
-}
 
-::selection {
-  background: rgba(79, 124, 198, 0.22);
-}
-
-body::-webkit-scrollbar {
-  width: 10px;
-}
-
-body::-webkit-scrollbar-thumb {
-  background: rgba(79, 124, 198, 0.2);
-  border-radius: 999px;
-}

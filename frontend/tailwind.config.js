@@ -3,54 +3,36 @@ export default {
   theme: {
     extend: {
       colors: {
-        brand: {
-          50: '#eef8fb',
-          100: '#dbeff5',
-          200: '#b9dceb',
-          300: '#83bddb',
-          400: '#4f96c4',
-          500: '#2e7d9d',
-          600: '#24647e',
-          700: '#1b4c5f',
-          800: '#163c4f',
-          900: '#122f41'
-        },
-        accent: '#f08c4a',
-        success: '#2e7d32',
-        warning: '#f9a825',
-        error: '#d32f2f',
-        neutral: {
-          50: '#f9fafb',
-          100: '#f3f4f6',
-          200: '#e5e7eb',
-          300: '#d1d5db',
-          400: '#9ca3af',
-          500: '#6b7280',
-          600: '#4b5563',
-          700: '#374151',
-          800: '#1f2937',
-          900: '#111827'
-        }
+        ink: '#111827',
+        paper: '#F8F7F3',
+        accent: '#FF7A45',
+        success: '#4C9F70',
+        border: '#D9D7CF',
+        muted: '#6B7280',
+        surface: '#FFFFFF'
       },
       boxShadow: {
-        sm: '0 1px 4px rgba(17, 24, 39, 0.06)',
-        md: '0 4px 12px rgba(17, 24, 39, 0.08)',
-        lg: '0 8px 24px rgba(17, 24, 39, 0.12)'
+        level1: '0 1px 2px rgba(17, 24, 39, 0.05), 0 8px 24px rgba(17, 24, 39, 0.04)',
+        level2: '0 6px 20px rgba(17, 24, 39, 0.10)',
+        level3: '0 24px 80px rgba(17, 24, 39, 0.22)'
       },
       borderRadius: {
-        sm: '0.375rem',
-        md: '0.75rem',
-        lg: '1.25rem'
+        sm: '0.25rem',
+        md: '0.5rem'
       },
       spacing: {
-        xs: '0.5rem',
-        sm: '1rem',
-        md: '1.5rem',
-        lg: '2rem',
-        xl: '3rem'
+        1: '0.25rem',
+        2: '0.5rem',
+        3: '0.75rem',
+        4: '1rem',
+        6: '1.5rem',
+        8: '2rem',
+        12: '3rem',
+        16: '4rem'
       },
       fontFamily: {
-        sans: ['Inter', 'system-ui', 'sans-serif']
+        sans: ['Inter', 'system-ui', 'sans-serif'],
+        display: ['"Clash Display"', 'Inter', 'system-ui', 'sans-serif']
       }
     }
   },

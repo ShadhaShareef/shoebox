@@ -1,5 +1,3 @@
-import type { MouseEventHandler } from 'react';
-
 type SizeSelectorProps = {
   sizes: string[];
   value: string;
@@ -8,13 +6,16 @@ type SizeSelectorProps = {
 
 const SizeSelector = ({ sizes, value, onChange }: SizeSelectorProps) => {
   return (
-    <div className="grid grid-cols-4 gap-3 sm:grid-cols-6">
+    <div className="grid grid-cols-4 gap-2 sm:grid-cols-6">
       {sizes.map((size) => (
         <button
           key={size}
           type="button"
           onClick={() => onChange(size)}
-          className={`rounded-3xl border px-3 py-2 text-sm font-semibold transition ${value === size ? 'border-brand-600 bg-brand-50 text-brand-700' : 'border-neutral-200 bg-white text-neutral-700 hover:border-neutral-300'}`}
+          className={`rounded-md border px-3 py-2 text-sm font-semibold transition-fast ${
+            value === size ? 'border-ink bg-ink text-white' : 'border-border bg-white text-ink hover:border-ink'
+          }`}
+          aria-pressed={value === size}
         >
           {size}
         </button>

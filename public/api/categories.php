@@ -1,20 +1,34 @@
 <?php
 require_once __DIR__ . '/../../config/db.php';
+require_once __DIR__ . '/security.php';
+
+session_start();
+
+// Security checks
+setSecurityHeaders();
+handleCorsPreFlight();
+checkRateLimit();
+
 header('Content-Type: application/json; charset=utf-8');
-$stmt = $pdo->query('SELECT DISTINCT category FROM products ORDER BY category ASC');
-$categories = $stmt->fetchAll(PDO::FETCH_COLUMN);
-$imageMap = [
-    'Running Shoes' => 'https://images.unsplash.com/photo-1528701800489-20f2d5a38f7d?auto=format&fit=crop&w=900&q=80',
-    'Casual Shoes' => 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=900&q=80',
-    'Sports Shoes' => 'https://images.unsplash.com/photo-1600185365370-0c8d1e8e51d3?auto=format&fit=crop&w=900&q=80',
-    'Formal Shoes' => 'https://images.unsplash.com/photo-1528701800489-20f2d5a38f7d?auto=format&fit=crop&w=900&q=80',
-];
-$items = array_map(function ($category) use ($imageMap) {
-    return [
-        'slug' => strtolower(str_replace(' ', '-', $category)),
-        'name' => $category,
-        'description' => "Explore our curated {$category} collection.",
-        'image_url' => $imageMap[$category] ?? 'https://images.unsplash.com/photo-1519741491745-1d2de7b77158?auto=format&fit=crop&w=900&q=80',
-    ];
-}, $categories);
-echo json_encode(['categories' => $items], JSON_UNESCAPED_SLASHES);
+
+try {
+    $stmt = $pdo->prepare('SELECT id, name, slug, description, image_url FROM categories ORDER BY name ASC');
+    $stmt->execute();
+    $categories = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    
+    $items = array_map(function ($category) {
+        return [
+            'id' => (int)$category['id'],
+            'slug' => htmlspecialchars($category['slug'], ENT_QUOTES, 'UTF-8'),
+            'name' => htmlspecialchars($category['name'], ENT_QUOTES, 'UTF-8'),
+            'description' => htmlspecialchars($category['description'] ?? 'Explore our curated collection.', ENT_QUOTES, 'UTF-8'),
+            'image_url' => htmlspecialchars($category['image_url'] ?? 'https://images.unsplash.com/photo-1519741491745-1d2de7b77158?auto=format&fit=crop&w=900&q=80', ENT_QUOTES, 'UTF-8'),
+        ];
+    }, $categories);
+    
+    jsonResponse(['categories' => $items]);
+    
+} catch (Exception $e) {
+    error_log('Categories API Error: ' . $e->getMessage());
+    jsonError('Failed to fetch categories', 500);
+}

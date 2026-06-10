@@ -1,213 +1,315 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useParams, useSearchParams, useNavigate, Link } from 'react-router-dom';
-import type { Category, Product } from '../types';
-import { fetchCategories, fetchProducts } from '../lib/api';
-import Container from '../components/layout/Container';
+import { Link, useSearchParams } from 'react-router-dom';
 import ProductCard from '../components/cards/ProductCard';
-import Checkbox from '../components/ui/Checkbox';
+import Drawer from '../components/ui/Drawer';
+import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
 import Select from '../components/ui/Select';
-import Pagination from '../components/ui/Pagination';
-import Button from '../components/ui/Button';
+import Badge from '../components/ui/Badge';
+import PageHeader from '../components/layout/PageHeader';
+import { fetchBrands, fetchProducts, addToCart, fetchWishlist, toggleWishlist } from '../lib/api';
+import { collections, sortOptions } from '../lib/retail';
+import type { Brand, Product } from '../types';
+import { FilterIcon } from '../components/ui/icons';
+import { useAuth } from '../context/AuthContext';
 
-const sortOptions = [
-  { value: 'best', label: 'Best selling' },
-  { value: 'newest', label: 'Newest arrivals' },
-  { value: 'price_asc', label: 'Price: Low to High' },
-  { value: 'price_desc', label: 'Price: High to Low' },
-];
+const PAGE_SIZE = 16;
 
 const ShopPage = () => {
-  const params = useParams<{ category?: string }>();
+  const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
-  const navigate = useNavigate();
-  const [categories, setCategories] = useState<Category[]>([]);
+  const [query, setQuery] = useState(searchParams.get('search') ?? '');
+  const [selectedCategory, setSelectedCategory] = useState(searchParams.get('category') ?? 'all');
+  const [selectedBrand, setSelectedBrand] = useState(searchParams.get('brand') ?? 'all');
+  const [sort, setSort] = useState(searchParams.get('sort') ?? 'best');
+  const [page, setPage] = useState(Number(searchParams.get('page') ?? '1'));
   const [products, setProducts] = useState<Product[]>([]);
   const [total, setTotal] = useState(0);
-  const [pageSize] = useState(12);
   const [loading, setLoading] = useState(true);
-  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
-
-  const currentCategory = params.category ?? searchParams.get('category') ?? '';
-  const searchQuery = searchParams.get('search') ?? '';
-  const sort = searchParams.get('sort') ?? 'best';
-  const page = Number(searchParams.get('page') ?? 1);
-
-  const filterChips = useMemo(() => {
-    const chips: Array<{ label: string; value: string; key: string }> = [];
-    if (searchQuery) chips.push({ label: `Search: ${searchQuery}`, value: '', key: 'search' });
-    if (currentCategory) chips.push({ label: `Category: ${currentCategory}`, value: 'category', key: 'category' });
-    return chips;
-  }, [currentCategory, searchQuery]);
+  const [brands, setBrands] = useState<Brand[]>([]);
+  const [wishlistIds, setWishlistIds] = useState<number[]>([]);
+  const [drawerOpen, setDrawerOpen] = useState(false);
 
   useEffect(() => {
-    const load = async () => {
-      setLoading(true);
-      const response = await fetchProducts({ category: currentCategory, search: searchQuery, sort, page, limit: pageSize });
-      setProducts(response.items);
-      setTotal(response.total);
-      setLoading(false);
-    };
-    load();
-  }, [currentCategory, searchQuery, sort, page, pageSize]);
+    setQuery(searchParams.get('search') ?? '');
+    setSelectedCategory(searchParams.get('category') ?? 'all');
+    setSelectedBrand(searchParams.get('brand') ?? 'all');
+    setSort(searchParams.get('sort') ?? 'best');
+    setPage(Number(searchParams.get('page') ?? '1'));
+  }, [searchParams]);
 
   useEffect(() => {
-    fetchCategories().then((data) => setCategories(data.categories));
-  }, []);
-
-  const updateParam = (key: string, value: string) => {
-    if (key === 'category') {
-      const next = new URLSearchParams(searchParams);
-      next.delete('category');
-      next.delete('page');
-      const search = next.toString();
-      if (value) {
-        navigate({ pathname: `/shop/${encodeURIComponent(value)}`, search }, { replace: false });
-      } else {
-        navigate({ pathname: '/shop', search }, { replace: false });
+    let active = true;
+    setLoading(true);
+    (async () => {
+      try {
+        const [productResponse, brandResponse] = await Promise.all([
+          fetchProducts({
+            page,
+            limit: PAGE_SIZE,
+            search: query || undefined,
+            category: selectedCategory !== 'all' ? selectedCategory : undefined,
+            brand: selectedBrand !== 'all' ? selectedBrand : undefined,
+            sort,
+          }),
+          fetchBrands(),
+        ]);
+        if (!active) return;
+        setProducts(productResponse.items);
+        setTotal(productResponse.total);
+        setBrands(brandResponse.brands);
+      } finally {
+        if (active) setLoading(false);
       }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [page, query, selectedBrand, selectedCategory, sort]);
+
+  useEffect(() => {
+    if (!user) {
+      setWishlistIds([]);
       return;
     }
+    let active = true;
+    fetchWishlist()
+      .then((response) => {
+        if (!active) return;
+        setWishlistIds(response.items.map((item) => item.id));
+      })
+      .catch(() => setWishlistIds([]));
+    return () => {
+      active = false;
+    };
+  }, [user]);
 
+  const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const searchCountLabel = useMemo(() => `${total} product${total === 1 ? '' : 's'}`, [total]);
+
+  const updateParams = (updates: Record<string, string | number | null>) => {
     const next = new URLSearchParams(searchParams);
-    if (value) {
-      next.set(key, value);
-    } else {
-      next.delete(key);
+    Object.entries(updates).forEach(([key, value]) => {
+      if (value === null || value === '' || value === 'all') next.delete(key);
+      else next.set(key, String(value));
+    });
+    setSearchParams(next, { replace: true });
+  };
+
+  const handleWishlist = async (product: Product) => {
+    if (!user) {
+      window.location.href = '/login';
+      return;
     }
-    if (key !== 'page') next.delete('page');
-    setSearchParams(next);
+    await toggleWishlist(product.id);
+    setWishlistIds((current) =>
+      current.includes(product.id) ? current.filter((id) => id !== product.id) : [...current, product.id]
+    );
+  };
+
+  const handleQuickAdd = async (product: Product) => {
+    if (!user) {
+      window.location.href = '/login';
+      return;
+    }
+    try {
+      await addToCart({ product_id: product.id, quantity: 1, size: product.sizes?.[0] ?? '9' });
+      window.dispatchEvent(new Event('cart:updated'));
+    } finally {
+    }
   };
 
   return (
-    <Container className="space-y-8 pb-12 pt-8 lg:pb-16 lg:pt-10">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <p className="text-sm uppercase tracking-[0.28em] text-neutral-500">Shop</p>
-          <h1 className="mt-2 text-3xl font-semibold text-neutral-900">Find the perfect pair.</h1>
-        </div>
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-          <div className="rounded-3xl border border-neutral-200 bg-white p-3 shadow-sm">
-            <p className="text-sm text-neutral-600">Showing</p>
-            <p className="text-lg font-semibold text-neutral-900">{total} items</p>
-          </div>
-          <Button variant="secondary" size="md" onClick={() => setMobileFiltersOpen(true)} className="md:hidden">
-            Filters
-          </Button>
-        </div>
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        eyebrow="Shop"
+        title="Browse the box"
+        subtitle="Search, filter, sort, and add with no page reload. Store availability follows the product wherever it appears."
+        action={<Badge variant="neutral">{searchCountLabel}</Badge>}
+      />
 
-      <div className="grid gap-8 lg:grid-cols-[280px_1fr]">
-        <aside className="hidden flex-col gap-6 rounded-[32px] border border-neutral-200 bg-white px-6 py-7 shadow-sm lg:flex">
-          <div>
-            <p className="text-sm font-semibold uppercase tracking-[0.24em] text-neutral-500">Filters</p>
-          </div>
-          <div className="space-y-4">
-            <div className="space-y-3">
-              <p className="text-sm font-semibold text-neutral-900">Search</p>
-              <Input
-                value={searchQuery}
-                onChange={(event) => updateParam('search', event.target.value)}
-                placeholder="Search products"
-              />
+      <div className="grid gap-6 lg:grid-cols-[280px_minmax(0,1fr)]">
+        <aside className="hidden lg:block">
+          <div className="sticky top-24 space-y-4 surface p-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-ink">Filters</h2>
+              <button type="button" className="text-xs font-semibold text-muted hover:text-ink" onClick={() => updateParams({ search: null, category: null, brand: null, sort: 'best', page: 1 })}>
+                Reset
+              </button>
             </div>
             <div className="space-y-3">
-              <p className="text-sm font-semibold text-neutral-900">Category</p>
               <div className="space-y-2">
-                {categories.map((category) => (
-                  <label key={category.slug} className="flex items-center gap-3 rounded-3xl border border-neutral-200 bg-neutral-50 px-4 py-3 text-sm text-neutral-700 transition hover:border-brand-300">
-                    <Checkbox checked={currentCategory === category.slug} onChange={() => updateParam('category', currentCategory === category.slug ? '' : category.slug)} />
-                    <span>{category.name}</span>
-                  </label>
-                ))}
+                <label className="text-xs font-semibold uppercase tracking-[0.12em] text-muted">Search</label>
+                <Input
+                  value={query}
+                  onChange={(event) => {
+                    setPage(1);
+                    updateParams({ search: event.target.value, page: 1 });
+                  }}
+                  placeholder="Search by shoe, brand, or category"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs font-semibold uppercase tracking-[0.12em] text-muted">Category</label>
+                <Select value={selectedCategory} onChange={(event) => { setPage(1); updateParams({ category: event.target.value, page: 1 }); }}>
+                  <option value="all">All categories</option>
+                  {collections.map((collection) => (
+                    <option key={collection.slug} value={collection.slug}>
+                      {collection.label}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs font-semibold uppercase tracking-[0.12em] text-muted">Brand</label>
+                <Select value={selectedBrand} onChange={(event) => { setPage(1); updateParams({ brand: event.target.value, page: 1 }); }}>
+                  <option value="all">All brands</option>
+                  {brands.map((brand) => (
+                    <option key={brand.slug} value={brand.name}>
+                      {brand.name}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs font-semibold uppercase tracking-[0.12em] text-muted">Sort</label>
+                <Select value={sort} onChange={(event) => { setPage(1); updateParams({ sort: event.target.value, page: 1 }); }}>
+                  {sortOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </Select>
               </div>
             </div>
           </div>
         </aside>
 
-        <section className="space-y-6">
-          <div className="rounded-[32px] border border-neutral-200 bg-white p-6 shadow-sm">
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-              <div className="space-y-2">
-                <p className="text-sm uppercase tracking-[0.24em] text-neutral-500">Sort</p>
-                <Select value={sort} onChange={(event) => updateParam('sort', event.target.value)}>
-                  {sortOptions.map((option) => (
-                    <option key={option.value} value={option.value}>{option.label}</option>
-                  ))}
-                </Select>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {filterChips.map((chip) => (
-                  <button key={chip.key} type="button" onClick={() => updateParam(chip.key, '')} className="rounded-full border border-neutral-200 bg-neutral-100 px-4 py-2 text-sm text-neutral-700 transition hover:bg-neutral-200">
-                    {chip.label}
-                  </button>
+        <div className="space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-3 lg:hidden">
+            <Button variant="secondary" onClick={() => setDrawerOpen(true)} className="bg-white">
+              <FilterIcon className="h-4 w-4" />
+              Filters
+            </Button>
+            <div className="text-sm font-semibold text-muted">{searchCountLabel}</div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="relative flex-1 min-w-[220px]">
+              <Input
+                value={query}
+                onChange={(event) => {
+                  setPage(1);
+                  updateParams({ search: event.target.value, page: 1 });
+                }}
+                placeholder="Instant search"
+                aria-label="Search products"
+              />
+            </div>
+            <div className="hidden md:block md:min-w-[220px]">
+              <Select value={sort} onChange={(event) => updateParams({ sort: event.target.value, page: 1 })}>
+                {sortOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </Select>
+            </div>
+          </div>
+
+          {loading ? (
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {Array.from({ length: 8 }).map((_, index) => (
+                <div key={index} className="surface aspect-[4/5] animate-pulse bg-white" />
+              ))}
+            </div>
+          ) : products.length === 0 ? (
+            <div className="surface px-6 py-10 text-center">
+              <h2 className="text-lg font-semibold text-ink">No matches yet</h2>
+              <p className="mt-2 text-sm leading-6 text-muted">Tighten or clear filters to get back to the shelf.</p>
+            </div>
+          ) : (
+            <>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                {products.map((product) => (
+                  <ProductCard
+                    key={product.id}
+                    product={product}
+                    wishlisted={wishlistIds.includes(product.id)}
+                    onToggleWishlist={handleWishlist}
+                    onQuickAdd={handleQuickAdd}
+                  />
                 ))}
               </div>
-            </div>
-          </div>
 
-          <div className="grid gap-6 lg:grid-cols-2 xl:grid-cols-3">
-            {loading
-              ? Array.from({ length: 6 }).map((_, index) => (
-                  <div key={index} className="h-96 rounded-[28px] border border-neutral-200 bg-neutral-100" />
-                ))
-              : products.map((product) => <ProductCard key={product.id} product={product} />)}
-          </div>
-
-          <div className="flex items-center justify-between">
-            <p className="text-sm text-neutral-600">
-              Page {page} of {Math.max(1, Math.ceil(total / pageSize))}
-            </p>
-            <Pagination page={page} pageSize={pageSize} total={total} onPageChange={(next) => updateParam('page', String(next))} />
-          </div>
-        </section>
+              {pageCount > 1 ? (
+                <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4">
+                  <p className="text-sm text-muted">
+                    Page {page} of {pageCount}
+                  </p>
+                  <div className="flex gap-2">
+                    <Button variant="outline" disabled={page <= 1} onClick={() => updateParams({ page: page - 1 })} className="bg-white">
+                      Previous
+                    </Button>
+                    <Button variant="outline" disabled={page >= pageCount} onClick={() => updateParams({ page: page + 1 })} className="bg-white">
+                      Next
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
+            </>
+          )}
+        </div>
       </div>
 
-      {mobileFiltersOpen && (
-        <div className="fixed inset-0 z-50 bg-black/40 p-4 sm:p-6">
-          <div className="h-full overflow-y-auto rounded-[28px] bg-white p-6 shadow-xl">
-            <div className="mb-6 flex items-center justify-between">
-              <div>
-                <p className="text-sm uppercase tracking-[0.24em] text-neutral-500">Filters</p>
-                <h2 className="text-2xl font-semibold text-neutral-900">Refine results</h2>
-              </div>
-              <button type="button" className="text-sm font-semibold text-neutral-700" onClick={() => setMobileFiltersOpen(false)}>
-                Close
-              </button>
-            </div>
-            <div className="space-y-6">
-              <div className="space-y-3">
-                <p className="text-sm font-semibold text-neutral-900">Search</p>
-                <Input
-                  value={searchQuery}
-                  onChange={(event) => updateParam('search', event.target.value)}
-                  placeholder="Search products"
-                />
-              </div>
-              <div className="space-y-3">
-                <p className="text-sm font-semibold text-neutral-900">Category</p>
-                <div className="space-y-2">
-                  {categories.map((category) => (
-                    <label key={category.slug} className="flex items-center gap-3 rounded-3xl border border-neutral-200 bg-neutral-50 px-4 py-3 text-sm text-neutral-700">
-                      <Checkbox checked={currentCategory === category.slug} onChange={() => updateParam('category', currentCategory === category.slug ? '' : category.slug)} />
-                      <span>{category.name}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-              <div className="flex gap-3">
-                <Button variant="outline" size="lg" className="w-full" onClick={() => { navigate('/shop'); setSearchParams(new URLSearchParams()); setMobileFiltersOpen(false); }}>
-                  Clear all
-                </Button>
-                <Button size="lg" className="w-full" onClick={() => setMobileFiltersOpen(false)}>
-                  Apply filters
-                </Button>
-              </div>
-            </div>
+      <Drawer open={drawerOpen} onClose={() => setDrawerOpen(false)} title="Filters">
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <label className="text-xs font-semibold uppercase tracking-[0.12em] text-muted">Search</label>
+            <Input
+              value={query}
+              onChange={(event) => {
+                setPage(1);
+                updateParams({ search: event.target.value, page: 1 });
+              }}
+              placeholder="Search shoes"
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-xs font-semibold uppercase tracking-[0.12em] text-muted">Category</label>
+            <Select value={selectedCategory} onChange={(event) => updateParams({ category: event.target.value, page: 1 })}>
+              <option value="all">All categories</option>
+              {collections.map((collection) => (
+                <option key={collection.slug} value={collection.slug}>
+                  {collection.label}
+                </option>
+              ))}
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <label className="text-xs font-semibold uppercase tracking-[0.12em] text-muted">Brand</label>
+            <Select value={selectedBrand} onChange={(event) => updateParams({ brand: event.target.value, page: 1 })}>
+              <option value="all">All brands</option>
+              {brands.map((brand) => (
+                <option key={brand.slug} value={brand.name}>
+                  {brand.name}
+                </option>
+              ))}
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <label className="text-xs font-semibold uppercase tracking-[0.12em] text-muted">Sort</label>
+            <Select value={sort} onChange={(event) => updateParams({ sort: event.target.value, page: 1 })}>
+              {sortOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </Select>
           </div>
         </div>
-      )}
-    </Container>
+      </Drawer>
+    </div>
   );
 };
 
